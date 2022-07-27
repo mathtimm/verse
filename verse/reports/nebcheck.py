@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from os import path
 from pathlib import Path
 from prose import viz
-from prose.tess.near_eclipsing_binary import NEB
+from ..near_eclipsing_binary import NEB
 from prose.reports.core import LatexTemplate
 
 

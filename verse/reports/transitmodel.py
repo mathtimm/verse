@@ -9,12 +9,14 @@ from prose.reports.core import LatexTemplate
 import pandas as pd
 import collections
 import corner
+from .latex_template import VerseLatexTemplate
 
+template_folder = path.abspath(path.join(path.dirname(__file__), "..", "..", "latex"))
 
-class TransitModel(LatexTemplate):
+class TransitModel(VerseLatexTemplate):
 
     def __init__(self, obs, transit, trend=None, expected=None, posteriors={}, rms_bin=5/24/60,
-                 style="paper", template_name="transitmodel.tex"):
+                 template_name="transitmodel.tex"):
         """Transit modeling report
 
         Parameters
@@ -36,7 +38,7 @@ class TransitModel(LatexTemplate):
         template_name : str, optional
             [description], by default "transitmodel.tex"
         """
-        LatexTemplate.__init__(self, template_name, style=style)
+        super().__init__(template_name)
         self.obs = obs
         # Some paths
         # ----------

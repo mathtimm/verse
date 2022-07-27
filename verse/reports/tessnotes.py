@@ -1,12 +1,17 @@
-from prose.reports.core import LatexTemplate
+from .latex_template import VerseLatexTemplate
 import astropy.units as u
 import numpy as np
+from os import path
+from prose.reports.core import LatexTemplate
 
-class TESSNotes( LatexTemplate):
+template_folder = path.abspath(path.join(path.dirname(__file__), "..", "..", "latex"))
 
-    def __init__(self, obs, t_model, style="paper", template_name="tess-notes.tex"):
 
-        LatexTemplate.__init__(self, template_name, style=style)
+class TESSNotes(VerseLatexTemplate):
+
+    def __init__(self, obs, t_model, template_name="tess-notes.tex"):
+
+        super().__init__(template_name)
         self.obs = obs
         self.t_model = t_model
         self.notes_table = [
@@ -22,6 +27,7 @@ class TESSNotes( LatexTemplate):
             ["Detrending parameters", f"{self.obs.detrends}"],
             ["Comments in TTF before the observation:", f"{(self.obs.ttf_priors['Comments'])}"]
         ]
+
     def make(self, destination):
         self.make_report_folder(destination)
         open(self.tex_destination, "w").write(self.template.render(

@@ -147,7 +147,7 @@ class TFOPObservation(Observation):
         self.detrends = detrends
 
         X = self.polynomial(**detrends).T
-        c = np.linalg.lstsq(X.T, self.diff_flux)[0]
+        c = np.linalg.lstsq(X.T, self.diff_flux, rcond=None)[0]
 
         if limb_darkening_coefs:
             logg = self.exofop_priors['Stellar log(g) (cm/s^2)'].values[0]
