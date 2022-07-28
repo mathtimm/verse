@@ -5,16 +5,16 @@ import re
 import pandas as pd
 import requests as req
 import numpy as np
-from prose.console_utils import info, error, warning
 from prose.blocks import catalogs
 from datetime import datetime
+
 
 class TFOPObservation(Observation):
     """
     Subclass of Observation specific to TFOP observations
     """
 
-    def __init__(self, photfile, name=None):
+    def __init__(self, photfile, name=None, time_verbose=False):
         """
         Parameters
         ----------
@@ -23,7 +23,7 @@ class TFOPObservation(Observation):
         name : str, optional
             To add if the TOI number is not given in target name (only number portion with planet: e.g. 1234.01), by default is None
         """
-        super().__init__(photfile)
+        super().__init__(photfile,time_verbose=time_verbose)
         if name is None:
             name = self.name
         self.tic_data = None
@@ -232,9 +232,6 @@ class TFOPObservation(Observation):
             self.summary = az.summary(
                 trace, var_names=variables, round_to=4
             )
-        # This should go in the results table of transitmodel
-        #for i in self.summary.index:
-        #    print(i, '=', self.summary['mean'][i], '+/-', self.summary['sd'][i])
 
         self.posteriors = {}
         for i in self.summary.index:
