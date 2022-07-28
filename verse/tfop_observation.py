@@ -105,7 +105,6 @@ class TFOPObservation(Observation):
         # using Gaia is easier to correct for proper motion... (discuss with LG)
         self.set_gaia_target(self.gaia_from_toi, verbose=verbose)
 
-
     def auto_modeling(self,detrends=None,limb_darkening_coefs=True,tune=2000,draws=3000,cores=3,chains=2,target_accept=0.9,
                       **kwargs):
 
