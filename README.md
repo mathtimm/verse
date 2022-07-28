@@ -1,3 +1,4 @@
 # verse
 
-Annex to prose package for TESS follow-up observations and reporting
+ <b>verse<b> is an extension of the prose package for TESS follow-up observations and reporting. 
+
