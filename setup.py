@@ -23,7 +23,8 @@ setup(
         "prose",
         "exoplanet",
         "pymc3",
-        "pymc3_ext"
+        "pymc3_ext",
+        "corner"
     ],
     extras_require={
         'docs': [

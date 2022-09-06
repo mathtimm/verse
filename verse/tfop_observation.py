@@ -105,7 +105,7 @@ class TFOPObservation(Observation):
         # using Gaia is easier to correct for proper motion... (discuss with LG)
         self.set_gaia_target(self.gaia_from_toi, verbose=verbose)
 
-    def auto_modeling(self,detrends=None,limb_darkening_coefs=True,tune=2000,draws=3000,cores=3,chains=2,target_accept=0.9,
+    def auto_modeling(self,detrends=None,limb_darkening_coefs=True, use_duration=False, tune=2000,draws=3000,cores=3,chains=2,target_accept=0.9,
                       **kwargs):
 
         """
@@ -174,14 +174,24 @@ class TFOPObservation(Observation):
             t0 = pm.Normal('t0', 2450000 + float(self.ttf_priors['jd_mid']), 0.05)
             p = pm.Normal('P', self.exofop_priors['Period (days)'].values[0], self.exofop_priors["Period (days) err"].values[0])
             b = pm.Uniform("b", 0, 1)
-            depth = pm.Uniform("depth", 0, self.exofop_priors['Depth (ppm)'].values[0]*2 *1e-6, testval=self.exofop_priors['Depth (ppm)'].values[0]*1e-6)
+            depth = pm.Uniform("depth", 0, self.exofop_priors['Depth (ppm)'].values[0]*5 *1e-6, testval=self.exofop_priors['Depth (ppm)'].values[0]*1e-6)
             ror = pm.Deterministic("ror", star.get_ror_from_approx_transit_depth(depth, b))
             r_p = pm.Deterministic("r_p", ror * r_s)  # In solar radius
             r = pm.Deterministic('r', r_p * 1 / earth2sun)
 
-            # Keplerian orbit
-            # ---------------
-            orbit = xo.orbits.KeplerianOrbit(period=p, t0=t0, r_star=r_s, b=b, m_star=m_s)
+            if use_duration:
+                dur = float(self.ttf_priors['jd_end']) - float(self.ttf_priors['jd_start'])
+                duration = pm.Normal('duration',dur,float(self.ttf_priors['duration_unc_hrs'])/24)
+
+                # Keplerian orbit
+                # ---------------
+                orbit = xo.orbits.KeplerianOrbit(period=p, t0=t0, b=b,duration=duration)
+
+            else:
+
+                # Keplerian orbit
+                # ---------------
+                orbit = xo.orbits.KeplerianOrbit(period=p, t0=t0, r_star=r_s, b=b, m_star=m_s)
 
             # starry light-curve
             # ---------------
@@ -224,6 +234,9 @@ class TFOPObservation(Observation):
                 **kwargs
             )
         variables = ["P", "r", 't0', 'b', 'u', 'r_s', 'm_s', 'ror', 'depth', 'a', 'a/r_s', 'i']
+
+        if use_duration:
+            variables.append('duration')
 
         self.samples = pm.trace_to_dataframe(trace, varnames=variables)
 
@@ -269,7 +282,7 @@ def claret_2012(filter, teff, logg, method):
     if filter == 'I+z':
         filters.append('I')
         filters.append("z'")
-    if filter == 'z' or filter == 'r' or filter == 'g':
+    elif filter == 'z' or filter == 'r' or filter == 'g':
         filters.append(filter + "'")
     else:
         filters.append(filter)
