@@ -15,7 +15,7 @@ template_folder = path.abspath(path.join(path.dirname(__file__), "..", "..", "la
 
 class TransitModel(VerseLatexTemplate):
 
-    def __init__(self, obs, transit, trend=None, expected=None, posteriors={}, rms_bin=5/24/60,
+    def __init__(self, obs, transit, trend=None, expected=None, posteriors={}, use_duration=False, rms_bin=5/24/60,
                  template_name="transitmodel.tex"):
         """Transit modeling report
 
@@ -44,6 +44,7 @@ class TransitModel(VerseLatexTemplate):
         # ----------
         self.destination = None
         self.report_name = None
+        self.use_duration = use_duration
         self.figure_destination = None
         self.transit_model = transit
         self.trend_model = trend if trend is not None else np.zeros_like(self.obs.time)
@@ -70,7 +71,7 @@ class TransitModel(VerseLatexTemplate):
             ["b", f"{self.posteriors['b']}" "$\pm$" f"{self.posteriors['b_e']}", "-"],
             ["Duration", f"{self.t14:.2f} min", f"{self.priors['duration']:.2f}" "$\pm$" f"{self.priors['duration_e']:.2f} min"],
             ["(Rp/R*)\u00b2", f"{self.posteriors['depth'] * 1e3:.2f}" 'e-3' "$\pm$" f"{self.posteriors['depth_e'] * 1e3:.2f}" 'e-3',"-"],
-            ["Apparent depth (min. flux)", f"{np.abs(min(self.transit_model)) * 1e3:.2f}",  f"{self.priors['depth']:.2f}" 'e-3' "$\pm$" f"{self.priors['depth_e']:.2f}" 'e-3'],
+            ["Apparent depth (min. flux)", f"{np.abs(min(self.transit_model)) * 1e3:.2f}" 'e-3',  f"{self.priors['depth']:.2f}" 'e-3' "$\pm$" f"{self.priors['depth_e']:.2f}" 'e-3'],
             ["a/R*", f"{self.posteriors['a/r_s']}" "$\pm$" f"{self.posteriors['a/r_s_e']}", "-"],
             ["i", f"{self.posteriors['i']}" "$\pm$" f"{self.posteriors['i_e']}", "-"],
             ["SNR", f"{self.snr:.2f}", "-"],
@@ -118,11 +119,22 @@ class TransitModel(VerseLatexTemplate):
 
     def make_corner_plot(self):
         if self.obs.samples is not None:
-            fig = corner.corner(self.obs.samples,
-                                truths=[self.obs.opt['P'], self.obs.opt['r'], self.obs.opt['t0'], self.obs.opt['b'], self.obs.opt['u'][0],
-                                        self.obs.opt['u'][1], self.obs.opt['r_s'], self.obs.opt['m_s'], self.obs.opt['ror'],
-                                        self.obs.opt['depth'], self.obs.opt['a'], self.obs.opt['a/r_s'], self.obs.opt['i']])
-            fig.patch.set_facecolor('xkcd:white')
+            if self.use_duration:
+                fig = corner.corner(self.obs.samples,
+                                    truths=[self.obs.opt['P'], self.obs.opt['r'], self.obs.opt['t0'], self.obs.opt['b'], self.obs.opt['u'][0],
+                                            self.obs.opt['u'][1], self.obs.opt['r_s'], self.obs.opt['m_s'], self.obs.opt['ror'],
+                                            self.obs.opt['depth'], self.obs.opt['a'], self.obs.opt['a/r_s'], self.obs.opt['i'],
+                                            self.obs.opt['duration']])
+                fig.patch.set_facecolor('xkcd:white')
+            else:
+                fig = corner.corner(self.obs.samples,
+                                    truths=[self.obs.opt['P'], self.obs.opt['r'], self.obs.opt['t0'], self.obs.opt['b'],
+                                            self.obs.opt['u'][0],
+                                            self.obs.opt['u'][1], self.obs.opt['r_s'], self.obs.opt['m_s'],
+                                            self.obs.opt['ror'],
+                                            self.obs.opt['depth'], self.obs.opt['a'], self.obs.opt['a/r_s'],
+                                            self.obs.opt['i']])
+                fig.patch.set_facecolor('xkcd:white')
 
     def to_csv_report(self,destination):
         """
