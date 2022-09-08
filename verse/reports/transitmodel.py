@@ -10,12 +10,13 @@ import pandas as pd
 import collections
 import corner
 from .latex_template import VerseLatexTemplate
+from ..tfop_observation import to_non_diluted, to_diluted
 
 template_folder = path.abspath(path.join(path.dirname(__file__), "..", "..", "latex"))
 
 class TransitModel(VerseLatexTemplate):
 
-    def __init__(self, obs, transit, trend=None, expected=None, posteriors={}, use_duration=False, rms_bin=5/24/60,
+    def __init__(self, obs, transit, trend=None, expected=None, posteriors={}, use_duration=False, use_dilution=False, rms_bin=5/24/60,
                  template_name="transitmodel.tex"):
         """Transit modeling report
 
@@ -31,6 +32,10 @@ class TransitModel(VerseLatexTemplate):
             tuple of (t0, duration) of expected transit, by default None
         posteriors : dict
             Results of the posterior distributions of the fit including mean and standard deviation.
+        use_duration : Bool
+            True if the duration was used as prior instead of the stellar parameters to model the transit.
+        use_dilution: Bool
+            True if the aperture of the target star includes a contaminating star.
         rms_bin : float, optional
             [description], by default 0.005
         style : str, optional
@@ -45,10 +50,12 @@ class TransitModel(VerseLatexTemplate):
         self.destination = None
         self.report_name = None
         self.use_duration = use_duration
+        self.use_dilution = use_dilution
         self.figure_destination = None
         self.transit_model = transit
         self.trend_model = trend if trend is not None else np.zeros_like(self.obs.time)
-        self.residuals = self.obs.diff_flux - self.transit_model - self.trend_model
+        self.residuals = self.obs.diff_flux - to_diluted(self.trend_model, self.obs.opt['alpha']) - to_diluted(
+            self.transit_model, self.obs.opt['alpha'], transit=True)
         intransit = self.transit_model < -1e-6
         self.ingress = self.obs.time[intransit][0]
         self.egress = self.obs.time[intransit][-1]
@@ -77,10 +84,13 @@ class TransitModel(VerseLatexTemplate):
             ["SNR", f"{self.snr:.2f}", "-"],
             ["RMS per bin (%s min)" % f"{self.rms[1]:.1f}", f"{self.rms[0]:.2e}", "-"],
         ]
+        if self.use_dilution:
+            self.obstable.append(["Dilution factor", f"{self.posteriors['alpha']:.2f}","-"])
+            self.obstable.append(["Apparent depth (min. flux) (diluted)", f"{np.abs(min(self.obs.opt['dil_transit'])) * 1e3:.2f}" 'e-3',"-"])
 
     def plot_ingress_egress(self):
-        plt.axvline(self.t0 + self.duration / 2, c='C4', alpha=0.4, label='predicted ingress/egress')
-        plt.axvline(self.t0 - self.duration / 2, c='C4', alpha=0.4)
+        plt.axvline(self.expected[0] + self.expected[1] / 2, c='C4', alpha=0.4, label='predicted ingress/egress')
+        plt.axvline(self.expected[0] - self.expected[1] / 2, c='C4', alpha=0.4)
         plt.axvline(self.ingress, ls='--', c='C4', alpha=0.4, label='observed ingress/egress')
         plt.axvline(self.egress, ls='--', c='C4', alpha=0.4)
         _, ylim = plt.ylim()
@@ -104,10 +114,12 @@ class TransitModel(VerseLatexTemplate):
         self.to_csv_report(destination)
 
     def plot_lc_model(self):
-        viz.plot_systematics_signal(self.obs.time,self.obs.diff_flux,self.trend_model,self.transit_model)
+
+        viz.plot_systematics_signal(self.obs.time, to_non_diluted(self.obs.diff_flux, self.obs.opt['alpha']),
+                                        self.trend_model, self.transit_model)
 
         # plot expected and observed transits
-        std = 2 * np.std(self.obs.diff_flux)
+        std = 2 * np.std(to_non_diluted(self.obs.diff_flux, self.obs.opt['alpha']))
         t0, duration = self.expected
         viz.plot_section(1 + std, "expected", t0, duration, c="k")
         duration = self.egress - self.ingress
@@ -119,29 +131,21 @@ class TransitModel(VerseLatexTemplate):
 
     def make_corner_plot(self):
         if self.obs.samples is not None:
+            truths = [self.obs.opt['P'], self.obs.opt['r'], self.obs.opt['t0'], self.obs.opt['b'], self.obs.opt['u'][0],
+                      self.obs.opt['u'][1], self.obs.opt['r_s'], self.obs.opt['m_s'], self.obs.opt['ror'],self.obs.opt['depth'],
+                      self.obs.opt['a'], self.obs.opt['a/r_s'], self.obs.opt['i'],self.obs.opt['alpha']]
             if self.use_duration:
-                fig = corner.corner(self.obs.samples,
-                                    truths=[self.obs.opt['P'], self.obs.opt['r'], self.obs.opt['t0'], self.obs.opt['b'], self.obs.opt['u'][0],
-                                            self.obs.opt['u'][1], self.obs.opt['r_s'], self.obs.opt['m_s'], self.obs.opt['ror'],
-                                            self.obs.opt['depth'], self.obs.opt['a'], self.obs.opt['a/r_s'], self.obs.opt['i'],
-                                            self.obs.opt['duration']])
-                fig.patch.set_facecolor('xkcd:white')
-            else:
-                fig = corner.corner(self.obs.samples,
-                                    truths=[self.obs.opt['P'], self.obs.opt['r'], self.obs.opt['t0'], self.obs.opt['b'],
-                                            self.obs.opt['u'][0],
-                                            self.obs.opt['u'][1], self.obs.opt['r_s'], self.obs.opt['m_s'],
-                                            self.obs.opt['ror'],
-                                            self.obs.opt['depth'], self.obs.opt['a'], self.obs.opt['a/r_s'],
-                                            self.obs.opt['i']])
-                fig.patch.set_facecolor('xkcd:white')
+                truths.append(self.obs.opt['duration'])
 
-    def to_csv_report(self,destination):
+            fig = corner.corner(self.obs.samples,
+                                truths=truths)
+            fig.patch.set_facecolor('xkcd:white')
+
+    def to_csv_report(self, destination):
         """
         This one adds de-trended light-curve
         """
         destination = path.join(destination,'measurements.txt')
-
         comparison_stars = self.obs.comps[self.obs.aperture]
         list_diff = ["DIFF_FLUX_C%s" % i for i in comparison_stars]
         list_err = ["DIFF_ERROR_C%s" % i for i in comparison_stars]
@@ -158,7 +162,7 @@ class TransitModel(VerseLatexTemplate):
             {
                 "BJD-TDB" if self.obs.time_format == "bjd_tdb" else "JD-UTC": self.obs.time,
                 "DIFF_FLUX_T%s" % self.obs.target: self.obs.diff_flux,
-                "DIFF_FLUX_T%s_DETRENDED" % self.obs.target: self.obs.diff_flux - self.trend_model + 1,
+                "DIFF_FLUX_T%s_DETRENDED" % self.obs.target: self.obs.diff_flux - to_diluted(self.obs.opt['systematics'],self.obs.opt['alpha'])+1,
                 "DIFF_ERROR_T%s" % self.obs.target: self.obs.diff_error,
                 **dict(zip(list_columns, list_columns_array)),
                 "dx": self.obs.dx,
@@ -172,12 +176,11 @@ class TransitModel(VerseLatexTemplate):
         return df.to_csv(destination, sep="\t", index=False)
 
     def snr(self):
-        lc = self.obs.diff_flux - self.transit_model - self.trend_model
-        wn, rn = pont2006(self.obs.time, lc, plot=False)
+        wn, rn = pont2006(self.obs.time, self.residuals, plot=False)
         texp = np.mean(self.obs.exptime)
         _duration = (self.egress - self.ingress) * 24 * 60 * 60
         n = int(_duration / texp)
-        depth = np.abs(min(self.transit_model))
+        depth = np.abs(min(to_diluted(self.transit_model, self.obs.opt['alpha'], transit=True)))
         return depth / (np.sqrt(((wn ** 2) / n) + (rn ** 2)))
 
     def rms_binned(self):

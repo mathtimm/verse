@@ -105,7 +105,7 @@ class TFOPObservation(Observation):
         # using Gaia is easier to correct for proper motion... (discuss with LG)
         self.set_gaia_target(self.gaia_from_toi, verbose=verbose)
 
-    def auto_modeling(self,detrends=None,limb_darkening_coefs=True, use_duration=False, tune=2000,draws=3000,cores=3,chains=2,target_accept=0.9,
+    def auto_modeling(self,detrends=None, use_dilution=0, limb_darkening_coefs=True, use_duration=False, tune=2000,draws=3000,cores=3,chains=2,target_accept=0.9,
                       **kwargs):
 
         """
@@ -114,6 +114,10 @@ class TFOPObservation(Observation):
         ----------
         detrends : dict
             detrending parameters, polynomial fit of systematics (airmass, sky, dx, dy, fwhm)
+        use_duration : Bool
+            True if the duration was used as prior instead of the stellar parameters to model the transit.
+        dilution: tuple
+            Magnitudes of the target star and contaminant star in the aperture (m1,m2).
         limb_darkening_coefs : bool or list
             if True, automatic calculation of the quadratic limb darkening coefficients using Claret 2012 if effective temperature
             of the star is < 5000K https://ui.adsabs.harvard.edu/abs/2012A%26A...546A..14C/abstract
@@ -143,10 +147,21 @@ class TFOPObservation(Observation):
         from prose.utils import earth2sun
         from prose import viz
         import arviz as az
+
         self.detrends = detrends
 
         X = self.polynomial(**detrends).T
         c = np.linalg.lstsq(X.T, self.diff_flux, rcond=None)[0]
+
+        if isinstance(use_dilution,tuple):
+            m1, m2 = use_dilution
+            # For the contaminant star :
+            F2 = 10 ** (m2 / (-2.5))
+            # For the target star :
+            F1 = 10 ** (m1 / (-2.5))
+            _alpha = F2/F1
+        else:
+            _alpha=0
 
         if limb_darkening_coefs:
             logg = self.exofop_priors['Stellar log(g) (cm/s^2)'].values[0]
@@ -182,21 +197,24 @@ class TFOPObservation(Observation):
             if use_duration:
                 dur = float(self.ttf_priors['jd_end']) - float(self.ttf_priors['jd_start'])
                 duration = pm.Normal('duration',dur,float(self.ttf_priors['duration_unc_hrs'])/24)
-
                 # Keplerian orbit
                 # ---------------
                 orbit = xo.orbits.KeplerianOrbit(period=p, t0=t0, b=b,duration=duration)
 
             else:
-
                 # Keplerian orbit
                 # ---------------
                 orbit = xo.orbits.KeplerianOrbit(period=p, t0=t0, r_star=r_s, b=b, m_star=m_s)
+
+            alpha = pm.Normal('alpha', _alpha, 0.001)
+            y_p = to_non_diluted(self.diff_flux, alpha)
 
             # starry light-curve
             # ---------------
             light_curves = star.get_light_curve(orbit=orbit, r=r_p, t=self.time)
             transit = pm.Deterministic("transit", pm.math.sum(light_curves, axis=-1))
+            pm.Deterministic("dil_transit", to_diluted(transit, alpha, transit=True))
+            pm.Deterministic("dil_systematics", to_diluted(systematics, alpha))
 
             # Let's track some parameters :
             pm.Deterministic("a", orbit.a)
@@ -210,13 +228,14 @@ class TFOPObservation(Observation):
 
             # Likelihood function
             # -----------------------------
-            pm.Normal("obs", mu=mu, sd=self.diff_error, observed=self.diff_flux)
+            pm.Normal("obs", mu=mu, sd=self.diff_error, observed=y_p)
 
             # Maximum a posteriori
             # --------------------
             self.opt = pmx.optimize(start=model.test_point)
 
-        viz.plot_systematics_signal(self.time, self.diff_flux, self.opt['systematics'], self.opt['transit'])
+        viz.plot_systematics_signal(self.time, to_non_diluted(self.diff_flux, self.opt['alpha']),
+                                    self.opt['systematics'], self.opt['transit'])
         viz.paper_style()
 
         np.random.seed(42)
@@ -233,10 +252,11 @@ class TFOPObservation(Observation):
                 return_inferencedata=False,
                 **kwargs
             )
-        variables = ["P", "r", 't0', 'b', 'u', 'r_s', 'm_s', 'ror', 'depth', 'a', 'a/r_s', 'i']
+        variables = ["P", "r", 't0', 'b', 'u', 'r_s', 'm_s', 'ror', 'depth', 'a', 'a/r_s', 'i','alpha']
 
         if use_duration:
             variables.append('duration')
+
 
         self.samples = pm.trace_to_dataframe(trace, varnames=variables)
 
@@ -249,6 +269,7 @@ class TFOPObservation(Observation):
         for i in self.summary.index:
             self.posteriors[i] = self.summary['mean'][i]
             self.posteriors[i + '_e'] = self.summary['sd'][i]
+
 
 def claret_2012(filter, teff, logg, method):
     """
@@ -298,3 +319,14 @@ def claret_2012(filter, teff, logg, method):
         u1.append(df3.iloc[idxs2].u1.values[0])
         u2.append(df3.iloc[idxs2].u2.values[0])
     return np.mean(u1), np.mean(u2)
+
+
+def to_diluted(non_dil_flux,alpha,transit=False):
+    if transit is True:
+        return ((non_dil_flux + 1 + alpha) / (1 + alpha)) -1
+    else:
+        return (non_dil_flux + alpha) / (1 + alpha)
+
+
+def to_non_diluted(dil_flux,alpha):
+    return (dil_flux * (1 + alpha)) - alpha
