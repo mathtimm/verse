@@ -58,6 +58,7 @@ class UploadToExofop:
         self.tag = None
         self.fileList = self.check_files()
         self.print_responses = print_responses
+        self.filt = self.obs.filter.replace("'","p")
 
 
     def check_files(self):
@@ -80,7 +81,7 @@ class UploadToExofop:
         observatory = self.obs.telescope.name
         telsize = str(self.obs.telescope.diameter / 100)
         camera = self.obs.telescope.camera_name
-        filterband = self.obs.filter
+        filterband = self.filt
         pixscale = str(self.obs.telescope.pixel_scale.value)
         psf = str(round(self.obs.mean_target_psf * self.obs.telescope.pixel_scale.value, 2)) #mean psf in arcsec
         photaprad = str(round(self.obs.optimal_aperture, 1))  # mean aperture radius in pixels
@@ -189,7 +190,7 @@ class UploadToExofop:
                                     'file_tag': self.tag,
                                     'groupname': 'tfopwg',
                                     'propflag': 'on',
-                                    'id': tic
+                                    'tid': tic
                                 }
                                 response3 = session.post('https://exofop.ipac.caltech.edu/tess/insert_file.php', files=files, data=payload)
                                 if self.print_responses:
