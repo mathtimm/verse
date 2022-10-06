@@ -106,7 +106,7 @@ class UploadToExofop:
             deltamag = ''
         else:
             deltamag = str(self.delta_mag)
-        self.tag = self.obs.night_date.strftime("%Y%m%d") + '_' + self.username + '_' + observatory + '_' + str(self.tag_number)  # short_date+'_'+username+'_TIC'+tic+'_'+planet
+        self.tag = self.obs.night_date.strftime("%Y%m%d") + '_' + self.username + '_' + self.obs.telescope.name + '_' + str(self.tag_number)  # short_date+'_'+username+'_TIC'+tic+'_'+planet
         tic = self.obs.tic_id
 
         entries = {
@@ -129,7 +129,7 @@ class UploadToExofop:
             'notes': self.notes,
             'id': tic
         }
-        self.email_title = 'TIC ' + tic + '.' + self.obs.planet + ' ('f"{self.obs.name}"') on UT' + self.obs.night_date.strftime("%Y.%m.%d") + ' from ' + observatory + ' in ' + filterband
+        self.email_title = 'TIC ' + tic + '.' + self.obs.planet + ' ('f"{self.obs.name}"') on UT' + self.obs.night_date.strftime("%Y.%m.%d") + ' from ' + self.obs.telescope.name + ' in ' + filterband
 
         if self.figures_path.is_dir():
             credentials = {
