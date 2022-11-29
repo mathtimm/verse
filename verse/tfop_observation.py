@@ -27,7 +27,10 @@ class TFOPObservation(Observation):
         if name is None:
             name = self.name
         self.tic_data = None
-        self.exofop_priors = self.find_exofop_priors(name)
+        self.toi_df = None
+        tic = self.toi_to_tic(name)
+        self._tic_id= f"{tic}"
+        self._exofop_priors = self.find_exofop_priors(self._tic_id)
         self.ttf_priors = self.find_ttf_priors()
         self.toi = self.name.split('-')[1]
         try :
@@ -42,13 +45,21 @@ class TFOPObservation(Observation):
     # TESS specific methods
     # --------------------
 
-    def find_exofop_priors(self, name):
-
+    def toi_to_tic(self,name):
         try:
-            nb = re.findall('\d*\.?\d+', name) #TODO add the possibility to do this with TIC ID rather than TOI number (also in obs)
-            return pd.read_csv("https://exofop.ipac.caltech.edu/tess/download_toi?toi=%s&output=csv" % nb[0])
+             nb = re.findall('\d*\.?\d+', name) #TODO add the possibility to do this with TIC ID rather than TOI number (also in obs)
+             df = pd.read_csv("https://exofop.ipac.caltech.edu/tess/download_toi?toi=%s&output=csv" % nb[0])
+             self.toi_df = df
+             return df["TIC ID"][0]
         except KeyError:
-            print('TOI not found')
+            print('TIC not found')
+
+    def find_exofop_priors(self,tic_id):
+        try:
+            df = pd.read_csv(f"https://exofop.ipac.caltech.edu/tess/download_stellar.php?id={tic_id}&csv", sep='|')
+            return df.iloc[0]
+        except KeyError:
+            print('TIC not found')
 
     def find_ttf_priors(self):
         date = self.stack.night_date
@@ -74,8 +85,21 @@ class TFOPObservation(Observation):
     def tic_id(self):
         """TIC id from digits found in target name
         """
-        tic = self.exofop_priors["TIC ID"][0]
-        return f"{tic}"
+        return self._tic_id
+
+    @tic_id.setter
+    def tic_id(self, new):
+        self._tic_id = f"{new}"
+
+    @property
+    def exofop_priors(self):
+        """TIC id from digits found in target name
+        """
+        return self._exofop_priors
+
+    @exofop_priors.setter
+    def exofop_priors(self, tic):
+        self._exofop_priors = self.find_exofop_priors(tic)
 
     @property
     def gaia_from_toi(self):
@@ -164,8 +188,8 @@ class TFOPObservation(Observation):
             _alpha=0
 
         if limb_darkening_coefs:
-            logg = self.exofop_priors['Stellar log(g) (cm/s^2)'].values[0]
-            teff = self.exofop_priors['Stellar Eff Temp (K)'].values[0]
+            logg = self.exofop_priors['log(g)']
+            teff = self.exofop_priors['Teff (K)']
             ldcs = claret_2012(self.filter, teff, logg, 'L')
 
         if isinstance(limb_darkening_coefs,list):
@@ -181,15 +205,15 @@ class TFOPObservation(Observation):
             # -----------------
             u = xo.distributions.QuadLimbDark("u", testval=np.array(ldcs))
             star = xo.LimbDarkLightCurve(u[0], u[1])
-            m_s = pm.Normal('m_s',self.exofop_priors["Stellar Mass (M_Sun)"].values[0],self.exofop_priors["Stellar Mass (M_Sun) err"].values[0])
-            r_s = pm.Normal('r_s', self.exofop_priors["Stellar Radius (R_Sun)"].values[0],self.exofop_priors["Stellar Radius (R_Sun) err"].values[0])
+            m_s = pm.Normal('m_s',self.exofop_priors["Mass (M_Sun)"],self.exofop_priors["Mass (M_Sun) Error"])
+            r_s = pm.Normal('r_s', self.exofop_priors["Radius (R_Sun)"],self.exofop_priors["Radius (R_Sun) Error"])
 
             # Orbital parameters
             # -----------------
             t0 = pm.Normal('t0', 2450000 + float(self.ttf_priors['jd_mid']), 0.05)
-            p = pm.Normal('P', self.exofop_priors['Period (days)'].values[0], self.exofop_priors["Period (days) err"].values[0])
+            p = pm.Normal('P', float(self.ttf_priors['period(days)']), float(self.ttf_priors["period_unc(days)"]))
             b = pm.Uniform("b", 0, 1)
-            depth = pm.Uniform("depth", 0, self.exofop_priors['Depth (ppm)'].values[0]*5 *1e-6, testval=self.exofop_priors['Depth (ppm)'].values[0]*1e-6)
+            depth = pm.Uniform("depth", 0, float(self.ttf_priors['depth(ppt)'])*10 *1e-3, testval=float(self.ttf_priors['depth(ppt)'])*1e-3)
             ror = pm.Deterministic("ror", star.get_ror_from_approx_transit_depth(depth, b))
             r_p = pm.Deterministic("r_p", ror * r_s)  # In solar radius
             r = pm.Deterministic('r', r_p * 1 / earth2sun)

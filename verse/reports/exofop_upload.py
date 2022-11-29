@@ -61,8 +61,10 @@ class UploadToExofop:
         self.filt = self.obs.filter.replace("'","p")
         if any(x in self.obs.telescope.name for x in ['Europa', 'Io', 'Ganymede', 'Callisto']):
             self.tel_name = 'SSO (' + self.obs.telescope.name + ')'
-        if any(x in self.obs.telescope.name for x in ['Artemis']):
+        elif any(x in self.obs.telescope.name for x in ['Artemis']):
             self.tel_name = 'SNO (' + self.obs.telescope.name + ')'
+        else:
+            self.tel_name = self.obs.telescope.name
 
 
 
@@ -83,7 +85,7 @@ class UploadToExofop:
             toi = "TOI" + self.obs.toi
         else:
             toi = "TOI" + self.toi
-        observatory = self.tel_name
+        #observatory = self.tel_name
         telsize = str(self.obs.telescope.diameter / 100)
         camera = self.obs.telescope.camera_name
         filterband = self.filt
@@ -111,7 +113,7 @@ class UploadToExofop:
 
         entries = {
             'planet': toi,
-            'tel': observatory,
+            'tel': self.tel_name,
             'telsize': telsize,
             'camera': camera,
             'filter': filterband,

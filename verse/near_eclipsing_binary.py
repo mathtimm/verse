@@ -5,12 +5,12 @@ from prose.utils import binning, sigma_clip
 import matplotlib.patches as mpatches
 from prose import viz
 from prose import Observation, utils
+from . import TFOPObservation
 from prose.models import transit
 from prose import blocks
 import pandas as pd
 from astropy import units as u
 from prose.pipeline import AperturePhotometry
-#from prose import load
 
 
 def protopapas2005(t, t0, duration, depth, c, period=1):
@@ -35,9 +35,9 @@ class NEB(Observation):
        radius around the target in which to analyse other stars fluxes, by default 2.5 (in arcminutes)
     """
 
-    def __init__(self, obs, radius=2.5, nearby_ids=None, flip_corr=False, photometry=False, radec_file='', **kwargs):
+    def __init__(self, photfile, radius=2.5, nearby_ids=None, flip_corr=False, photometry=False, radec_file='', **kwargs):
 
-        super(NEB, self).__init__(obs.xarray.copy())
+        super().__init__(photfile)
 
         if photometry is True: #TODO test this new way of redoing the photometry for the NEB check
             self.new_photometry(radec_file, **kwargs)
@@ -46,7 +46,7 @@ class NEB(Observation):
         self.radius = radius
         if nearby_ids is None:
             target_distance = np.linalg.norm(self.stars - self.stars[self.target], axis=1)
-            self.nearby_ids = np.argwhere(target_distance * self.telescope.pixel_scale / 60 < self.radius).flatten()
+            self.nearby_ids = np.argwhere(target_distance * self.telescope.pixel_scale.value / 60 < self.radius).flatten()
         else:
             self.nearby_ids = nearby_ids
 
@@ -170,7 +170,7 @@ class NEB(Observation):
         self.plot_meridian_flip()
         plt.legend()
 
-    def show_neb_stars(self, size=10, legend=True, **kwargs):
+    def show_neb_stars(self, figsize=(10,10), legend=True, **kwargs):
         """
         Visualization of the star dispositions on the zoomed stack image.
                 Parameters
@@ -178,9 +178,8 @@ class NEB(Observation):
                 size : int
         """
 
-        self._check_show(size=size, **kwargs)
-
-        search_radius = 60 * self.radius / self.telescope.pixel_scale
+        self.stack.show(figsize=figsize,stars=False,**kwargs)
+        search_radius = 60 * self.radius / self.telescope.pixel_scale.value
         target_coord = self.stars[self.target]
         circle = mpatches.Circle(
             target_coord,
