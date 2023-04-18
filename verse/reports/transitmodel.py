@@ -198,7 +198,7 @@ class TransitModel(VerseLatexTemplate):
             priors['mass_s_e'] = self.obs.exofop_priors['Mass (M_Sun) Error']
             priors['period'] = float(self.obs.ttf_priors['period(days)'])
             priors['period_e'] = float(self.obs.ttf_priors["period_unc(days)"])
-            priors['duration'] = float(self.obs.ttf_priors['jd_end']) - float(self.obs.ttf_priors['jd_start']) * 24 * 60
+            priors['duration'] = (float(self.obs.ttf_priors['jd_end']) - float(self.obs.ttf_priors['jd_start'])) * 24 * 60
             priors['duration_e'] = float(self.obs.ttf_priors['duration_unc_hrs'])/24
             priors['depth'] = self.obs.toi_df['Depth (ppm)'][0] / 1e3
             priors['depth_e'] = self.obs.toi_df['Depth (ppm) err'][0] / 1e3

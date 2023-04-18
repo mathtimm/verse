@@ -187,12 +187,12 @@ class TFOPObservation(Observation):
         else:
             _alpha=0
 
-        if limb_darkening_coefs:
+        if limb_darkening_coefs is True:
             logg = self.exofop_priors['log(g)']
             teff = self.exofop_priors['Teff (K)']
             ldcs = claret_2012(self.filter, teff, logg, 'L')
 
-        if isinstance(limb_darkening_coefs,list):
+        if isinstance(limb_darkening_coefs, list):
             ldcs = limb_darkening_coefs
 
         with pm.Model() as model:
