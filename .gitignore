@@ -33,3 +33,9 @@ MANIFEST
 dev
 **/*.egg-info
 .idea
+
+## docs
+docs/_build
+docs/md/generated
+_docs
+**/.ipynb_checkpoints
